@@ -1,98 +1,92 @@
 // ==========================================
-// SERVICIO WEB: Registro y Autenticación
-// Evidencia GA7-220501096-AA5-EV01
+// SERVICIO WEB: Registro y Autenticación con BD
+// Evidencia GA7-220501096-AA5-EV01 (Corregida)
 // ==========================================
 
-// 1. Importar las librerías necesarias
 const express = require('express');
 const cors = require('cors');
+const mysql = require('mysql2');
 
-// 2. Inicializar la aplicación Express
 const app = express();
-const PORT = 3000; // Puerto donde correrá el servidor
+const PORT = 3000;
 
-// 3. Middlewares: Permiten que el servidor entienda JSON y permita peticiones externas
 app.use(express.json());
 app.use(cors());
 
-// 4. Base de datos simulada en memoria (Arreglo de usuarios)
-// En un proyecto real, aquí se conectaría a MySQL o MongoDB
-const usuarios = [];
+// ==========================================
+// CONEXIÓN A LA BASE DE DATOS MYSQL
+// ==========================================
+const db = mysql.createConnection({
+    host: 'localhost',
+    user: 'root',
+    password: 'Haider231206.', 
+    database: 'sigcc_db'
+});
+
+// Probar la conexión
+db.connect((err) => {
+    if (err) {
+        console.error('Error conectando a MySQL:', err);
+        return;
+    }
+    console.log('✅ Conectado a la base de datos MySQL (sigcc_db)');
+});
 
 // ==========================================
-// RUTAS DEL SERVICIO WEB
+// ENDPOINTS
 // ==========================================
 
-// ENDPOINT 1: Registro de usuario (POST /api/register)
+// 1. Registro de usuario
 app.post('/api/register', (req, res) => {
     const { usuario, password } = req.body;
 
-    // Validación básica: que no vengan vacíos
     if (!usuario || !password) {
-        return res.status(400).json({ 
-            status: "error", 
-            mensaje: "El usuario y la contraseña son obligatorios." 
-        });
+        return res.status(400).json({ status: "error", mensaje: "Usuario y contraseña obligatorios." });
     }
 
-    // Verificar si el usuario ya existe
-    const existeUsuario = usuarios.find(u => u.usuario === usuario);
-    if (existeUsuario) {
-        return res.status(400).json({ 
-            status: "error", 
-            mensaje: "El usuario ya está registrado." 
-        });
-    }
+    // Verificar si el usuario ya existe en la BD
+    const checkQuery = 'SELECT * FROM usuarios WHERE usuario = ?';
+    db.query(checkQuery, [usuario], (err, results) => {
+        if (err) return res.status(500).json({ status: "error", mensaje: "Error en el servidor" });
+        
+        if (results.length > 0) {
+            return res.status(400).json({ status: "error", mensaje: "El usuario ya existe." });
+        }
 
-    // Guardar el nuevo usuario
-    usuarios.push({ usuario, password });
-    
-    // Devolver mensaje de éxito
-    res.status(201).json({ 
-        status: "success", 
-        mensaje: "Usuario registrado exitosamente." 
+        // Insertar el nuevo usuario
+        const insertQuery = 'INSERT INTO usuarios (usuario, password) VALUES (?, ?)';
+        db.query(insertQuery, [usuario, password], (err, result) => {
+            if (err) return res.status(500).json({ status: "error", mensaje: "Error al registrar" });
+            
+            res.status(201).json({ status: "success", mensaje: "Usuario registrado exitosamente en la BD." });
+        });
     });
 });
 
-// ENDPOINT 2: Inicio de sesión (POST /api/login)
+// 2. Inicio de sesión
 app.post('/api/login', (req, res) => {
     const { usuario, password } = req.body;
 
-    // Validación básica: que no vengan vacíos
     if (!usuario || !password) {
-        return res.status(400).json({ 
-            status: "error", 
-            mensaje: "El usuario y la contraseña son obligatorios." 
-        });
+        return res.status(400).json({ status: "error", mensaje: "Usuario y contraseña obligatorios." });
     }
 
-    // Buscar si el usuario existe y la contraseña coincide
-    const usuarioEncontrado = usuarios.find(
-        u => u.usuario === usuario && u.password === password
-    );
+    // Buscar en la BD si el usuario y contraseña coinciden
+    const query = 'SELECT * FROM usuarios WHERE usuario = ? AND password = ?';
+    db.query(query, [usuario, password], (err, results) => {
+        if (err) return res.status(500).json({ status: "error", mensaje: "Error en el servidor" });
 
-    // Condicional: Si la autenticación es correcta o incorrecta
-    if (usuarioEncontrado) {
-        // Autenticación satisfactoria
-        res.status(200).json({ 
-            status: "success", 
-            mensaje: "Autenticación satisfactoria. ¡Bienvenido!" 
-        });
-    } else {
-        // Error en la autenticación
-        res.status(401).json({ 
-            status: "error", 
-            mensaje: "Error en la autenticación. Usuario o contraseña incorrectos." 
-        });
-    }
+        if (results.length > 0) {
+            res.status(200).json({ status: "success", mensaje: "Autenticación satisfactoria. ¡Bienvenido!" });
+        } else {
+            res.status(401).json({ status: "error", mensaje: "Error en la autenticación. Datos incorrectos." });
+        }
+    });
 });
 
 // ==========================================
-// INICIALIZACIÓN DEL SERVIDOR
+// INICIO DEL SERVIDOR
 // ==========================================
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en http://localhost:${PORT}`);
-    console.log(`Rutas disponibles:`);
-    console.log(`POST http://localhost:${PORT}/api/register`);
-    console.log(`POST http://localhost:${PORT}/api/login`);
 });
